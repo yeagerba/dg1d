@@ -16,7 +16,8 @@ m = [phi_l2.f]'*diag(QRule.Weights)*[phi_l2.f]; q = [phi_l2.f]'*diag(QRule.Weigh
 psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
 % Create a global L2 matrix
 %--------------------------------------------------------------------------
-L2 = cell(1,DG.Mesh.Nelems); [L2{:}] = deal(l2); L2 = spblkdiag(L2);
+% L2 = cell(1,DG.Mesh.Nelems); [L2{:}] = deal(l2); L2 = spblkdiag(L2);
+L2 = kron(speye(DG.Mesh.Nelems),l2);
 % Create the global X vector
 %--------------------------------------------------------------------------
 PSI.l2 = cell(1,DG.Mesh.Nelems); [PSI.l2{:}] = deal(([psi.l2]));
