@@ -11,7 +11,7 @@ classdef DGClass < handle
     M       % Global mass matrix
     A       % Global A matrix
     B       % Global B matrix
-    phi     % Local basis function evaluations matrix - used for plotting
+    phi     % Local basis function evaluations matrix
     PHI     % Global basis function evaluations matrix
     t       % Current time
   end
@@ -35,8 +35,6 @@ classdef DGClass < handle
       % Get the quadrature points and weigths
       %--------------------------------------------------------------------------
       QRule = quadGaussJacobi(DGClass.p+1,0,0);
-      % xi = QRule.Points;
-      % w = QRule.Weights;
       W = sparse(1:length(QRule.Weights),1:length(QRule.Weights),QRule.Weights);
 
       for i = 0:DGClass.p
@@ -85,7 +83,7 @@ classdef DGClass < handle
 
     end
 
-    function DGClass = RKstep(DGClass, RK, dt)
+    function RKstep(DGClass, RK, dt)
       % ===================================================================
       % This function steps the DG solution forward in time one step using
       % the given Runge--Kutta method
@@ -100,7 +98,7 @@ classdef DGClass < handle
       y = zeros(DGClass.NDoFs, RK.s+1);
       RHS = zeros(DGClass.NDoFs, RK.s);
 
-      % The first stage solution values is the current DG solution
+      % The first stage solution value is the current DG solution
       y(:,1) = DGClass.Uh;
 
       % Loop over stages
@@ -111,6 +109,10 @@ classdef DGClass < handle
         for j = 1:i-1
           y(:,i) = y(:,i) + ...
             RK.alpha(i-1,j)*y(:,j) + dt*RK.beta(i-1,j)*RHS(:,j);
+          % Apply slope limiter
+          if DGClass.ProbDef.limit_slope
+            y(:,i) = slopeLimiter(y(:,i), DGClass.p, DGClass.Mesh.Nelems);
+          end
         end
       end
 
@@ -120,7 +122,7 @@ classdef DGClass < handle
       DGClass.t = DGClass.t + dt;
     end
 
-    function DGClass = LMstep(DGClass, LM, dt)
+    function LMstep(DGClass, LM, dt)
       % ===================================================================
       % This function steps the DG solution forward in time one step using
       % the given linear multistep method
@@ -143,6 +145,11 @@ classdef DGClass < handle
         U = U + LM.alpha(i)*DGClass.Uh(:,i) + dt*LM.beta(i)*DGClass.RHS(:,i);
       end
 
+      % Apply slope limiter
+      if DGClass.ProbDef.limit_slope
+        U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems);
+      end
+
       % Update DG Solution, storing new solution in DGClass.Uh(:,1)
       for i = LM.r:-1:2
         DGClass.Uh(:,i) = DGClass.Uh(:,i-1);
@@ -157,8 +164,8 @@ classdef DGClass < handle
 
     function L2_Error = L2_error(DGClass)
 
-      if ~isprop(DGClass.ProbDef, 'Ue')
-        disp('Can''t compute error - no exact solution ProbDef.Ue')
+      if ~isfield(DGClass.ProbDef, 'Ue')
+        disp('Can''t compute L2 error - no exact solution ProbDef.Ue')
         return
       end
 
@@ -168,10 +175,9 @@ classdef DGClass < handle
       % Evaluate the basis functions at the Gauss points
       %--------------------------------------------------------------------------
       for i = 0:DGClass.p
-          phi_l2(i+1).f = polyval(DGClass.phi{i+1},QRule.Points);
+          phi_l2(i+1,:) = polyval(DGClass.phi{i+1},QRule.Points);
       end
-      PHI = cell(1,DGClass.Mesh.Nelems); [PHI{:}] = deal(([phi_l2.f]));
-      PHI = spblkdiag(PHI);
+      PHI = kron(speye(DGClass.Mesh.Nelems),phi_l2');
       % Compute the DG solution at Gauss points
       %--------------------------------------------------------------------------
       Uh = PHI*DGClass.Uh(:,1);
@@ -179,7 +185,7 @@ classdef DGClass < handle
       %--------------------------------------------------------------------------
       q = diag(QRule.Weights); Q = cell(1,DGClass.Mesh.Nelems); [Q{:}] = deal(q);
       Q = cellfun(@times,Q,num2cell(DGClass.Mesh.dx/2).','UniformOutput',0);
-      Q = spblkdiag(Q);
+      Q = kron(speye(DGClass.Mesh.Nelems),q);
       % Compute the element psi vector
       %--------------------------------------------------------------------------
       psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
@@ -207,10 +213,8 @@ classdef DGClass < handle
       %        DGClass.Mesh = mesh structure with fields Connectivity and Points
       %--------------------------------------------------------------------------
 
-      % Determine the number of elements, polynomial degree, and number of int points
+      % Determine the number of int points
       %--------------------------------------------------------------------------
-      nelems = length(DGClass.Mesh.Connectivity(:,1));
-      p = length(DGClass.phi)-1;
       nq = length(DGClass.phi);
       % Determine the mesh sizes
       %--------------------------------------------------------------------------
@@ -220,15 +224,14 @@ classdef DGClass < handle
       QRule = quadGaussJacobi(nq,0,0);
       % Evaluate the basis functions at the Gauss points
       %--------------------------------------------------------------------------
-      for i = 0:p
-          phi_l2(i+1).f = polyval(DGClass.phi{i+1},QRule.Points);
+      for i = 0:DGClass.p
+          phi_tv(i+1,:) = polyval(DGClass.phi{i+1},QRule.Points);
       end
-      PHI = cell(1,nelems); [PHI{:}] = deal(([phi_l2.f]));
-      PHI = spblkdiag(PHI);
+      PHI = kron(speye(DGClass.Mesh.Nelems),phi_tv);
       % Compute the DG solution at Gauss points
       %--------------------------------------------------------------------------
       Uh = PHI*DGClass.Uh(:,1);
-      Uh = reshape(Uh, [length(QRule.Weights), nelems]).';
+      Uh = reshape(Uh, [length(QRule.Weights), DGClass.Mesh.Nelems]).';
       % Compute mean DG solution over each element
       % -------------------------------------------------------------------------
       Uint = Uh*QRule.Weights.*h.'./2;
@@ -243,15 +246,12 @@ classdef DGClass < handle
 
       % Construct the global basis for plotting
       %----------------------------------------
-      PHI.Plot = cell(1,length(DGClass.Mesh.dx));
-      for j = 1:length(DGClass.Mesh.dx);
-          xi = [ 2/DGClass.Mesh.dx(j) -1 ];
-          for i = 0:DGClass.p
-              m = length(DGClass.phi{i+1});
-              PHI.Plot{j}(i+1,:) = [ zeros([1 DGClass.p+1-m]), polycompose(DGClass.phi{i+1},xi) ];
-          end
+      xi = [ 2/DGClass.Mesh.dx(1) -1 ];
+      for i = 0:DGClass.p
+          m = length(DGClass.phi{i+1});
+          phiplot(i+1,:) = [ zeros([1 DGClass.p+1-m]), polycompose(DGClass.phi{i+1},xi) ];
       end
-      PHI.Plot = spblkdiag(PHI.Plot);
+      PHI.Plot = kron(speye(DGClass.Mesh.Nelems),phiplot);
 
       % Setup the figure and axes
       % -------------------------
@@ -265,8 +265,16 @@ classdef DGClass < handle
       hold on
 
       % Plot the exact solution if it exists
-      if isprop(DGClass.ProbDef, 'Ue')
-        plot(xplot,DGClass.ProbDef.Ue(xplot,DGClass.t),'r','LineWidth',3)
+      % ------------------------------------
+      if isfield(DGClass.ProbDef, 'Ue')
+        exactline = plot(xplot,DGClass.ProbDef.Ue(xplot,DGClass.t),...
+                      'Color',0.7*ones(1,3),...
+                      'LineWidth',3,...
+                      'DisplayName','Exact Solution');
+        plot(xplot,DGClass.ProbDef.Ue(xplot,DGClass.t),...
+                      'Color',0.5*ones(1,3),...
+                      'LineWidth',1,...
+                      'DisplayName','Exact Solution');
       end
 
       h1 = gca;
@@ -276,28 +284,38 @@ classdef DGClass < handle
       breaks = DGClass.Mesh.Points(:,1)';
       coeffs = full(DGClass.Uh(:,1)'*PHI.Plot);
       DGpp = ppmak(breaks,coeffs);
-      fnplt(DGpp,'jumps');
-      hold on
+      fnplt(DGpp,'jumps') % plot DG solution within elements
+      ax = gca; DGline = ax.Children(1);
+      set(DGline,'Color',[0/255, 24/255, 168/255],...
+          'DisplayName',['DG Solution, \it p \rm = ',num2str(DGClass.p)]')
+
       xb = repmat(breaks,3,1);
       yb = repmat([200;-200;NaN],1,length(breaks));
-      plot(xb(:),yb(:),'k--')
+      % Mark element boundaries
+      plot(xb(:),yb(:),':','Color',0.8*ones(1,3))
+      % Plot DG solution on right side of element boundary
       plot(breaks,fnval(DGpp,breaks),'bo',...
           'LineWidth',2,...
-          'MarkerEdgeColor','b',...
+          'MarkerEdgeColor',[0/255, 24/255, 168/255],...
           'MarkerFaceColor',[.49 1 .63],...
-          'MarkerSize',4)
+          'MarkerSize',5);
+      % Plot DG solution on left side of element boundary
       plot(breaks,fnval(DGpp,breaks,'l'),'bo',...
           'LineWidth',2,...
-          'MarkerEdgeColor','b',...
+          'MarkerEdgeColor',[0/255, 24/255, 168/255],...
           'MarkerFaceColor',[.49 1 .63],...
-          'MarkerSize',4)
+          'MarkerSize',5)
 
       % Label axes, title, legend, and draw
       % -----------------------------------
-      title(h1,['t = ',num2str(DGClass.t),', p = ',num2str(DGClass.p+1),')']);
+      title(h1,['t = ',num2str(DGClass.t),', p = ',num2str(DGClass.p),')']);
       ylabel('u, u_h','FontSize',13,'FontWeight','bold')
       xlabel('x','FontSize',13,'FontWeight','bold')
-      legend('Exact Solution',['DG Solution, \it p \rm = ',num2str(DGClass.p)])
+      if isfield(DGClass.ProbDef, 'Ue')
+        legend([exactline, DGline])
+      else
+        legend(DGline)
+      end
       box on
       drawnow
     end

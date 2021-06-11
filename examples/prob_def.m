@@ -1,3 +1,4 @@
+clear all; close all;
 % Directory containing DG discretization code
 addpath('../')
 % Add path to included timesteppers so we can use them
@@ -9,34 +10,36 @@ addpath('../timesteppers/')
 
 % Gaussian distribution propogating to the right
 % ----------------------------------------------
-% ProbDef.name = 'linear_gaussian';  % Problem name
-% ProbDef.xL = -1;                   % Left endpoint
-% ProbDef.xR = 1;                    % Right endpoint
-% ProbDef.BCtype = 'periodic';       % Boundary conditions
-% ProbDef.c  = @(u) 1;               % Wave propagation speed (linear advection)
-% ProbDef.f  = @(u) ProbDef.c(u).*u; % Flux function (linear advection)
-% ProbDef.Ue = @(x,t) 1*exp( -((mod(x+1-t,2)-1)/0.25).^2 ); % Exact solution (if known)
-% ProbDef.U0 = @(x) ProbDef.Ue(x,0); % Exact solution (if known)
-% ProbDef.t0 = 0;                    % Initial time (set to 0 if not specified)
-% ProbDef.T = 9;                     % Final time
+ProbDef.name = 'linear_gaussian';  % Problem name
+ProbDef.xL = -1;                   % Left endpoint
+ProbDef.xR = 1;                    % Right endpoint
+ProbDef.BCtype = 'periodic';       % Boundary conditions
+ProbDef.c  = @(u) 1;               % Wave propagation speed (linear advection)
+ProbDef.f  = @(u) ProbDef.c(u).*u; % Flux function (linear advection)
+ProbDef.Ue = @(x,t) 1*exp( -((mod(x+1-t,2)-1)/0.25).^2 ); % Exact solution (if known)
+ProbDef.U0 = @(x) ProbDef.Ue(x,0); % Exact solution (if known)
+ProbDef.t0 = 0;                    % Initial time (set to 0 if not specified)
+ProbDef.T = 9;                     % Final time
+ProbDef.limit_slope = true;        % Slope limiter switch
 
-% Cockburn, Shu (1989) Example 1
-% ------------------------------
-ProbDef.name = 'Burgers''';
-ProbDef.xL = -1;
-ProbDef.xR = 1;
-ProbDef.BCtype = 'periodic';
-ProbDef.c = @(u) u/2;
-ProbDef.f = @(u) ProbDef.c(u).*u;
-ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
-ProbDef.t0 = 0;
-ProbDef.T = 2/pi * 0.5;
+% % Cockburn, Shu (1989) Example 1
+% % ------------------------------
+% ProbDef.name = 'CS_example_1';
+% ProbDef.xL = -2;
+% ProbDef.xR = 2;
+% ProbDef.BCtype = 'periodic';
+% ProbDef.c = @(u) u/2;
+% ProbDef.f = @(u) ProbDef.c(u).*u;
+% ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
+% ProbDef.t0 = 0;
+% ProbDef.T = 2/pi * 0.7;
+% ProbDef.limit_slope = false;        % Slope limiter switch
 
 
 % --------------------------
 % Construct the mesh object
 % --------------------------
-Nelems = 10;
+Nelems = 20;
 points(:,1) = linspace(ProbDef.xL,ProbDef.xR,Nelems+1);
 connectivity(:,1) = [1:Nelems];
 connectivity(:,2) = [2:Nelems+1];
@@ -49,7 +52,7 @@ Mesh = MeshClass(points, connectivity);
 % Initialize the solution in DG space
 % ------------------------------------
 
-p = 2; % DG polynomial degree
+p = 3; % DG polynomial degree
 DG = DGClass(p, Mesh, ProbDef);
 
 TVsnorm1 = DG.TV_seminorm()
@@ -61,11 +64,11 @@ TVsnorm1 = DG.TV_seminorm()
 
 % RK example
 % ------------
-% % Define RK method
+% Define RK method
 % RK.q = 3;      % Time stepper order
 % RK.s = 4;      % Number of stages
 % [RK.alpha, RK.beta, RK.cfl] = sspRKold(RK.q, RK.s);
-% dt = DG.Mesh.dx_min*RK.cfl;
+% dt = DG.Mesh.dx_min*RK.cfl*0.5;
 % NT = DG.ProbDef.T/dt;
 %
 % % Time stepping
