@@ -83,7 +83,13 @@ classdef DGClass < handle
 
     end
 
-    function RKstep(DGClass, RK, dt)
+    function RKstep(DGClass, RK, dt, M)
+      arguments
+        DGClass
+        RK
+        dt (1,1) double
+        M  (1,1) double  = NaN
+      end
       % ===================================================================
       % This function steps the DG solution forward in time one step using
       % the given Runge--Kutta method
@@ -110,8 +116,9 @@ classdef DGClass < handle
           y(:,i) = y(:,i) + ...
             RK.alpha(i-1,j)*y(:,j) + dt*RK.beta(i-1,j)*RHS(:,j);
           % Apply slope limiter
-          if DGClass.ProbDef.limit_slope
-            y(:,i) = slopeLimiter(y(:,i), DGClass.p, DGClass.Mesh.Nelems);
+          if ~isnan(M)
+            m = M * DGClass.Mesh.dx.^2; % Should be row vector!
+            U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems, m.');
           end
         end
       end
@@ -122,7 +129,13 @@ classdef DGClass < handle
       DGClass.t = DGClass.t + dt;
     end
 
-    function LMstep(DGClass, LM, dt)
+    function LMstep(DGClass, LM, dt, M)
+      arguments
+        DGClass
+        LM
+        dt (1,1) double
+        M  (1,1) double  = NaN
+      end
       % ===================================================================
       % This function steps the DG solution forward in time one step using
       % the given linear multistep method
@@ -131,11 +144,8 @@ classdef DGClass < handle
       %      LM.alpha - alpha coefficients vector
       %      LM.beta  - beta coefficients vector
       % dt : timestep - Can this live within DGClass or LM?
+      % M  : slope limiter tolerance (NaN for no limiting - default)
       % ===================================================================
-
-      % % Store current DG solution in matrix of previous steps
-      % DGClass.Uh_prev(:,i) = DGClass.Uh;
-      % DGClass.Uh = zeros(NDoFs, 1)
 
       % Initialize new solution vector
       U = zeros(DGClass.NDoFs, 1);
@@ -146,8 +156,9 @@ classdef DGClass < handle
       end
 
       % Apply slope limiter
-      if DGClass.ProbDef.limit_slope
-        U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems);
+      if ~isnan(M)
+        m = M * DGClass.Mesh.dx.^2; % Should be row vector!
+        U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems, m.');
       end
 
       % Update DG Solution, storing new solution in DGClass.Uh(:,1)

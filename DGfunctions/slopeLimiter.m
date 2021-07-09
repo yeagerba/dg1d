@@ -1,4 +1,4 @@
-function DoFs = slopeLimiter(DoFs,p,N)
+function DoFs = slopeLimiter(DoFs,p,N,m)
 
 %% SLOPELIMITER Applies the minmod slope limiter
 %    DoFs = slopeLimiter(DoFs,p,N) applies the minmod slope limiter to the
@@ -35,16 +35,26 @@ uBar = u(1,:);
 % Compute the DG solution at the end points of the element
 uPlus  = (-ones(1,p+1)).^(0:p)*u;
 uMinus = ones(1,p+1)*u;
+% Compute the arguments used in the minmod function
+u1 = [uMinus - uBar; uBar - uPlus];
+u2 = uBar - [uBar(end), uBar(1:end-1)];
+u3 = [uBar(2:end), uBar(1)] - uBar;
+% Apply the minmod function
+[minmodMinus,iMinus] = minmod([u1(1,:); u2; u3]);
+[minmodPlus,iPlus] = minmod([u1(2,:); u2; u3]);
+% Identify elements where |u1| <= m (see page 195 of [1])
+iMinus(abs(u1(1,:))<=m) = 1;
+iPlus(abs(u1(2,:))<=m) = 1;
+% Find elements to which slope limiter is applied
+iMod = or(iMinus~=1,iPlus~=1);
 % Compute the modified endpoints (see Eqs 2.10 and 2.11 on page 193 of [1])
-uMinusMod  = uBar + minmod([ uMinus - uBar; ...
-    uBar - [uBar(end), uBar(1:end-1)]; [uBar(2:end), uBar(1)] - uBar ]);
-uPlusMod = uBar - minmod([ uBar - uPlus; ...
-    uBar - [uBar(end), uBar(1:end-1)]; [uBar(2:end), uBar(1)] - uBar ]);
-% Identify the elements that have been slope limited
-iMod = or(abs(uPlusMod-uPlus)>100*eps, abs(uMinusMod-uMinus)>100*eps);
-% Adjust the slope of the element
+uMinusMod(iMod) = uBar(iMod) + minmodMinus(iMod);
+uPlusMod(iMod)  = uBar(iMod) - minmodPlus(iMod);
+% Compute the new slope of the element
 u(2,iMod) = (uMinusMod(iMod) - uPlusMod(iMod))/2;
+% If p > 1, then...
 if p > 1
+    % Zero out higher-order DoFs
     u(3:end,iMod) = 0;
 end
 % Save the modified DoFs
