@@ -1,5 +1,5 @@
 % Define a DG class
-classdef DGClass < handle
+classdef DG < handle
 
   properties
     p       % DG polynomial degree
@@ -17,27 +17,27 @@ classdef DGClass < handle
   end
 
   methods
-    function DGClass = DGClass(p, Mesh, ProbDef)
+    function DG = DG(p, Mesh, ProbDef)
       % This function initializes the DG solution
       % p       : DG polynomial degree
       % Mesh    : a Mesh object
       % ProbDef : a ProbDef structure defining the problem to solve
 
       % Path to additional DG functions
-      classpath = mfilename('fullpath')
-      addpath([classpath(1:end-7), 'DGfunctions/'])
+      classpath = mfilename('fullpath');
+      addpath([classpath(1:end-2), 'DGfunctions/']);
 
-      DGClass.p = p;
-      DGClass.Mesh = Mesh;
-      DGClass.ProbDef = ProbDef;
-      DGClass.NDoFs = Mesh.Nelems*(DGClass.p+1);
+      DG.p = p;
+      DG.Mesh = Mesh;
+      DG.ProbDef = ProbDef;
+      DG.NDoFs = Mesh.Nelems*(DG.p+1);
 
       % Get the quadrature points and weigths
       %--------------------------------------------------------------------------
-      QRule = quadGaussJacobi(DGClass.p+1,0,0);
+      QRule = quadGaussJacobi(DG.p+1,0,0);
       W = sparse(1:length(QRule.Weights),1:length(QRule.Weights),QRule.Weights);
 
-      for i = 0:DGClass.p
+      for i = 0:DG.p
         % Construct the i-th basis function
         %----------------------------------------------------------------------
         phi{i+1} = polyJacobi(i,0,0);
@@ -53,12 +53,12 @@ classdef DGClass < handle
       Phi.n    = sparse(Phi.n);    dPhi.n    = sparse(dPhi.n);
       Phi.plus = sparse(Phi.plus); Phi.minus = sparse(Phi.minus);
 
-      DGClass.phi = phi; % (This is only used for plotting)
+      DG.phi = phi; % (This is only used for plotting)
 
       % Compute the mass matrix
       %--------------------------------------------------------------------------
       M = Phi.n'*W*Phi.n; M(abs(M)<=(eps*100)) = 0;
-      DGClass.M = double(sym(M));
+      DG.M = double(sym(M));
 
       % Compute the element matrics a, b+ and b-
       %--------------------------------------------------------------------------
@@ -68,24 +68,24 @@ classdef DGClass < handle
 
       % Assemble global matrices
       %--------------------------------------------------------------------------
-      DGClass.A = kron(diag(2./Mesh.dx),a);
-      DGClass.B = [ kron(diag(2./Mesh.dx),b.plus) zeros([DGClass.NDoFs,1])   ] + ...
-          [ zeros([DGClass.NDoFs,1]) kron(diag(2./Mesh.dx),-b.minus) ];
+      DG.A = kron(diag(2./Mesh.dx),a);
+      DG.B = [ kron(diag(2./Mesh.dx),b.plus) zeros([DG.NDoFs,1])   ] + ...
+          [ zeros([DG.NDoFs,1]) kron(diag(2./Mesh.dx),-b.minus) ];
 
-      DGClass.PHI.points = kron(eye(Mesh.Nelems),Phi.n);
-      DGClass.PHI.plus   = kron(eye(Mesh.Nelems),Phi.plus);
-      DGClass.PHI.minus  = kron(eye(Mesh.Nelems),Phi.minus);
+      DG.PHI.points = kron(eye(Mesh.Nelems),Phi.n);
+      DG.PHI.plus   = kron(eye(Mesh.Nelems),Phi.plus);
+      DG.PHI.minus  = kron(eye(Mesh.Nelems),Phi.minus);
 
       % Compute the L2 projection of the initial condition
       %------------------------------------------------------------------------
-      DGClass.t = ProbDef.t0;
-      DGClass.Uh = L2_projection_1D(DGClass);
+      DG.t = ProbDef.t0;
+      DG.Uh = L2_projection_1D(DG);
 
     end
 
-    function RKstep(DGClass, RK, dt, M)
+    function RKstep(DG, RK, dt, M)
       arguments
-        DGClass
+        DG
         RK
         dt (1,1) double
         M  (1,1) double  = NaN
@@ -97,41 +97,42 @@ classdef DGClass < handle
       % RK : A structure defining the RK method in Shu--Osher form
       %      RK.alpha - alpha coefficients vector
       %      RK.beta  - beta coefficients vector
-      % dt : timestep - Can this live within DGClass or RK?
+      % dt : timestep - Can this live within DG or RK?
       % ===================================================================
 
       % Initialize matrices to store stage values
-      y = zeros(DGClass.NDoFs, RK.s+1);
-      RHS = zeros(DGClass.NDoFs, RK.s);
+      y = zeros(DG.NDoFs, RK.s+1);
+      RHS = zeros(DG.NDoFs, RK.s);
 
       % The first stage solution value is the current DG solution
-      y(:,1) = DGClass.Uh;
+      y(:,1) = DG.Uh;
 
       % Loop over stages
       for i = 2:RK.s+1
         % Compute right hand side of current stage (i-1)
-        RHS(:,i-1) = DG_spatial_operator(y(:,i-1), DGClass);
+        RHS(:,i-1) = DG_spatial_operator(y(:,i-1), DG);
         % Step to the next stage
         for j = 1:i-1
           y(:,i) = y(:,i) + ...
             RK.alpha(i-1,j)*y(:,j) + dt*RK.beta(i-1,j)*RHS(:,j);
           % Apply slope limiter
           if ~isnan(M)
-            m = M * DGClass.Mesh.dx.^2; % Should be row vector!
-            U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems, m.');
+            m = M * DG.Mesh.dx.^2; % Should be row vector!
+            % U = slopeLimiter(U, DG.p, DG.Mesh.Nelems, m.');
+            DG.slopeLimiter(m.');
           end
         end
       end
 
       % Update DG Solution
-      DGClass.Uh = y(:,end);
+      DG.Uh = y(:,end);
       % Update time
-      DGClass.t = DGClass.t + dt;
+      DG.t = DG.t + dt;
     end
 
-    function LMstep(DGClass, LM, dt, M)
+    function LMstep(DG, LM, dt, M)
       arguments
-        DGClass
+        DG
         LM
         dt (1,1) double
         M  (1,1) double  = NaN
@@ -143,72 +144,182 @@ classdef DGClass < handle
       % LM : A structure defining the LM method
       %      LM.alpha - alpha coefficients vector
       %      LM.beta  - beta coefficients vector
-      % dt : timestep - Can this live within DGClass or LM?
+      % dt : timestep - Can this live within DG or LM?
       % M  : slope limiter tolerance (NaN for no limiting - default)
       % ===================================================================
 
       % Initialize new solution vector
-      U = zeros(DGClass.NDoFs, 1);
+      U = zeros(DG.NDoFs, 1);
 
       % Step to the next stage
       for i = 1:LM.r
-        U = U + LM.alpha(i)*DGClass.Uh(:,i) + dt*LM.beta(i)*DGClass.RHS(:,i);
+        U = U + LM.alpha(i)*DG.Uh(:,i) + dt*LM.beta(i)*DG.RHS(:,i);
       end
 
       % Apply slope limiter
       if ~isnan(M)
-        m = M * DGClass.Mesh.dx.^2; % Should be row vector!
-        U = slopeLimiter(U, DGClass.p, DGClass.Mesh.Nelems, m.');
+        m = M * DG.Mesh.dx.^2; % Should be row vector!
+        % U = slopeLimiter(U, DG.p, DG.Mesh.Nelems, m.');
+        DG.slopeLimiter(m.');
       end
 
-      % Update DG Solution, storing new solution in DGClass.Uh(:,1)
+      % Update DG Solution, storing new solution in DG.Uh(:,1)
       for i = LM.r:-1:2
-        DGClass.Uh(:,i) = DGClass.Uh(:,i-1);
-        DGClass.RHS(:,i) = DGClass.RHS(:,i-1);
+        DG.Uh(:,i) = DG.Uh(:,i-1);
+        DG.RHS(:,i) = DG.RHS(:,i-1);
       end
-      DGClass.Uh(:,1) = U;
-      DGClass.RHS(:,1) = DG_spatial_operator(U, DGClass);
+      DG.Uh(:,1) = U;
+      DG.RHS(:,1) = DG_spatial_operator(U, DG);
 
       % Update time
-      DGClass.t = DGClass.t + dt;
+      DG.t = DG.t + dt;
     end
 
-    function L2_Error = L2_error(DGClass)
+    function slopeLimiter(DG, m)
+      %% SLOPELIMITER Applies the minmod slope limiter
+      %    DoFs = slopeLimiter(DoFs,p,N) applies the minmod slope limiter to the
+      %    degrees of freedom, DoFs, of a DG solution of degree p for N elements.
+      %    See pages 193 and 194 of [1] for details.
+      %
+      %    Note: This implementation assumes the Legendre polynomials as a basis
+      %    for the DG solution and periodic boundary conditions.
+      %
+      %--------------------------------------------------------------------------
+      %    Reference:
+      %
+      %    [1] Bernardo Cockburn and Chi-Wang Shu, "Runge--Kutta Discontinuous
+      %        Galerkin methods for convection-dominated problems," Journal of
+      %        Scientific Computing, 16(3), 173–261, 2001.
+      %
 
-      if ~isfield(DGClass.ProbDef, 'Ue')
+      %% Apply the slope limiter
+
+      % Reshape the DoFs into a (p+1) by N array
+      u = reshape(DG.Uh(:,1),DG.p+1,DG.Mesh.Nelems);
+      % Store the mean value of the DG solution over each element
+      uBar = u(1,:);
+      % Compute the DG solution at the end points of the element
+      uPlus  = (-ones(1,DG.p+1)).^(0:DG.p)*u;
+      uMinus = ones(1,DG.p+1)*u;
+      % Compute the arguments used in the minmod function
+      u1 = [uMinus - uBar; uBar - uPlus];
+      if strcmp(DG.ProbDef.BCtype, 'periodic')
+        u2 = uBar - [uBar(end), uBar(1:end-1)];
+        u3 = [uBar(2:end), uBar(1)] - uBar;
+      elseif strcmp(DG.ProbDef.BCtype, 'dirichlet')
+        error('Not implemented')
+        u2 = uBar - [uBar(end), uBar(1:end-1)];
+        u3 = [uBar(2:end), uBar(1)] - uBar;
+      end
+      % Apply the minmod function
+      [minmodMinus,iMinus] = minmod([u1(1,:); u2; u3]);
+      [minmodPlus,iPlus] = minmod([u1(2,:); u2; u3]);
+      % Identify elements where |u1| <= m (see page 195 of [1])
+      iMinus(abs(u1(1,:))<=m) = 1;
+      iPlus(abs(u1(2,:))<=m) = 1;
+      % Find elements to which slope limiter is applied
+      iMod = or(iMinus~=1,iPlus~=1);
+      % Compute the modified endpoints (see Eqs 2.10 and 2.11 on page 193 of [1])
+      uMinusMod(iMod) = uBar(iMod) + minmodMinus(iMod);
+      uPlusMod(iMod)  = uBar(iMod) - minmodPlus(iMod);
+      % Compute the new slope of the element
+      u(2,iMod) = (uMinusMod(iMod) - uPlusMod(iMod))/2;
+      % If p > 1, then...
+      if DG.p > 1
+          % Zero out higher-order DoFs
+          u(3:end,iMod) = 0;
+      end
+      % Save the modified DoFs
+      DG.Uh(:,1) = u(:);
+
+      % ====================================
+      % NESTED FUNCTION: minmod
+      % ====================================
+      function [m,I] = minmod(A)
+
+        %% MINMOD The minmod function
+        %    m = minmod(A) applies the so-called minmod function to an array.
+        %
+        %     � If A is a vector of length n, then minmod(A) returns s*min(abs(A)),
+        %       if s = sign(A(1)) = ... = sign(A(n)), otherwise it returns 0.
+        %
+        %       Examples: A = [  1  2  3 ]; minmod(A) =  1
+        %                 B = [ -2 -3 -4 ]; minmod(B) = -2
+        %                 C = [ -1  2  3 ]; minmod(C) =  0
+        %
+        %     � If A is a matrix, then minmod(A) returns a row vector m where
+        %       m(i) = minmod(A(:,i)), i.e., it applies the minmod function as
+        %       described above to each column of A.
+        %
+        %       Example: A = [ 1 -2 -1; 2 -1 2; 3 -4 3 ]; minmod(A) = [ 1 -1 0 ]
+        %
+        %    [m,I] = minmod(A) applies the minmod function as described above and
+        %    also returns the the index into the operating dimension that corre-
+        %    sponds to the minmod value of A or 0.
+        %
+        %       Example: A = [ 1 -2 -1; 2 -1 2; 3 -4 3 ]; [m,I] = minmod(A) returns
+        %       m = [ 1 -1 0 ], I = [ 1 2 0 ]
+        %
+
+        %% Validate input
+
+        ip = inputParser;
+        vA = @(x)validateattributes(x,{'numeric'},{'2d'});
+        ip.addRequired('A',vA);
+        ip.parse(A);
+        ip.Results;
+
+        %% Apply the minmod function
+
+        [M,I] = min(abs(A));
+        switch min(size(A))
+            case 1
+                m = isequal(abs(sum(sign(A))),length(A))*sign(A(1))*M;
+            otherwise
+                m = (abs(sum(sign(A))) == size(A,1)).*sign(A(1,:)).*M;
+        end
+        I = I.*logical(m);
+
+      end
+
+    end
+
+    function L2_Error = L2_error(DG)
+
+      if ~isfield(DG.ProbDef, 'Ue')
         disp('Can''t compute L2 error - no exact solution ProbDef.Ue')
         return
       end
 
       % Retrieve a sufficient number of Gauss points
       %--------------------------------------------------------------------------
-      QRule = quadGaussJacobi(2*DGClass.p+3,0,0);
+      QRule = quadGaussJacobi(2*DG.p+3,0,0);
       % Evaluate the basis functions at the Gauss points
       %--------------------------------------------------------------------------
-      for i = 0:DGClass.p
-          phi_l2(i+1,:) = polyval(DGClass.phi{i+1},QRule.Points);
+      for i = 0:DG.p
+          phi_l2(i+1,:) = polyval(DG.phi{i+1},QRule.Points);
       end
-      PHI = kron(speye(DGClass.Mesh.Nelems),phi_l2');
+      PHI = kron(speye(DG.Mesh.Nelems),phi_l2');
       % Compute the DG solution at Gauss points
       %--------------------------------------------------------------------------
-      Uh = PHI*DGClass.Uh(:,1);
+      Uh = PHI*DG.Uh(:,1);
       % Compute the quadrature matrix
       %--------------------------------------------------------------------------
-      q = diag(QRule.Weights); Q = cell(1,DGClass.Mesh.Nelems); [Q{:}] = deal(q);
-      Q = cellfun(@times,Q,num2cell(DGClass.Mesh.dx/2).','UniformOutput',0);
-      Q = kron(speye(DGClass.Mesh.Nelems),q);
+      q = diag(QRule.Weights); Q = cell(1,DG.Mesh.Nelems); [Q{:}] = deal(q);
+      Q = cellfun(@times,Q,num2cell(DG.Mesh.dx/2).','UniformOutput',0);
+      Q = kron(speye(DG.Mesh.Nelems),q);
       % Compute the element psi vector
       %--------------------------------------------------------------------------
       psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
       % Create the global X vector
       %--------------------------------------------------------------------------
-      PSI.l2 = cell(1,DGClass.Mesh.Nelems); [PSI.l2{:}] = deal(([psi.l2]));
-      X.elem = num2cell([DGClass.Mesh.Points(1:end-1),DGClass.Mesh.Points(2:end)]',1);
+      PSI.l2 = cell(1,DG.Mesh.Nelems); [PSI.l2{:}] = deal(([psi.l2]));
+      X.elem = num2cell([DG.Mesh.Points(1:end-1),DG.Mesh.Points(2:end)]',1);
       X.l2 = cellfun(@mtimes,PSI.l2,[X.elem],'UniformOutput',0);
       X.l2 = reshape([X.l2{:}],numel([X.l2{:}]),1);
       % Determine U at all points X.l2
       %--------------------------------------------------------------------------
-      UE = DGClass.ProbDef.Ue(X.l2,DGClass.t);
+      UE = DG.ProbDef.Ue(X.l2,DG.t);
 
       % Compute the L2 error
       %--------------------------------------------------------------------------
@@ -217,32 +328,34 @@ classdef DGClass < handle
 
     end
 
-    function TV = TV_seminorm(DGClass)
+    function TV = TV_seminorm(DG)
+      %% This can be made more efficient - element mean is just the first DOF!
+
       %--------------------------------------------------------------------------
-      % Input: DGClass.Uh    = Vector of DG degrees of freedom
-      %        DGClass.phi  = cell of basis functions
-      %        DGClass.Mesh = mesh structure with fields Connectivity and Points
+      % Input: DG.Uh    = Vector of DG degrees of freedom
+      %        DG.phi  = cell of basis functions
+      %        DG.Mesh = mesh structure with fields Connectivity and Points
       %--------------------------------------------------------------------------
 
       % Determine the number of int points
       %--------------------------------------------------------------------------
-      nq = length(DGClass.phi);
+      nq = length(DG.phi);
       % Determine the mesh sizes
       %--------------------------------------------------------------------------
-      h = [DGClass.Mesh.Points(2:end)-DGClass.Mesh.Points(1:end-1)]';
+      h = [DG.Mesh.Points(2:end)-DG.Mesh.Points(1:end-1)]';
       % Retrieve Gauss points
       %--------------------------------------------------------------------------
       QRule = quadGaussJacobi(nq,0,0);
       % Evaluate the basis functions at the Gauss points
       %--------------------------------------------------------------------------
-      for i = 0:DGClass.p
-          phi_tv(i+1,:) = polyval(DGClass.phi{i+1},QRule.Points);
+      for i = 0:DG.p
+          phi_tv(i+1,:) = polyval(DG.phi{i+1},QRule.Points);
       end
-      PHI = kron(speye(DGClass.Mesh.Nelems),phi_tv);
+      PHI = kron(speye(DG.Mesh.Nelems),phi_tv);
       % Compute the DG solution at Gauss points
       %--------------------------------------------------------------------------
-      Uh = PHI*DGClass.Uh(:,1);
-      Uh = reshape(Uh, [length(QRule.Weights), DGClass.Mesh.Nelems]).';
+      Uh = PHI*DG.Uh(:,1);
+      Uh = reshape(Uh, [length(QRule.Weights), DG.Mesh.Nelems]).';
       % Compute mean DG solution over each element
       % -------------------------------------------------------------------------
       Uint = Uh*QRule.Weights.*h.'./2;
@@ -253,16 +366,16 @@ classdef DGClass < handle
 
     end
 
-    function plot(DGClass)
+    function plot(DG)
 
       % Construct the global basis for plotting
       %----------------------------------------
-      xi = [ 2/DGClass.Mesh.dx(1) -1 ];
-      for i = 0:DGClass.p
-          m = length(DGClass.phi{i+1});
-          phiplot(i+1,:) = [ zeros([1 DGClass.p+1-m]), polycompose(DGClass.phi{i+1},xi) ];
+      xi = [ 2/DG.Mesh.dx(1) -1 ];
+      for i = 0:DG.p
+          m = length(DG.phi{i+1});
+          phiplot(i+1,:) = [ zeros([1 DG.p+1-m]), polycompose(DG.phi{i+1},xi) ];
       end
-      PHI.Plot = kron(speye(DGClass.Mesh.Nelems),phiplot);
+      PHI.Plot = kron(speye(DG.Mesh.Nelems),phiplot);
 
       % Setup the figure and axes
       % -------------------------
@@ -270,19 +383,19 @@ classdef DGClass < handle
       set(gca,'NextPlot','replaceChildren');
       set(gcf, 'Position', [100 100 995 452]);
       set(gca,'FontSize',13,'FontWeight','bold');
-      axis([DGClass.Mesh.Points(1), DGClass.Mesh.Points(end), -1.7, 1.7])
+      axis([DG.Mesh.Points(1), DG.Mesh.Points(end), -2.1, 2.1])
       box on
-      xplot = linspace(DGClass.ProbDef.xL,DGClass.ProbDef.xR,DGClass.Mesh.Nelems*10);
+      xplot = linspace(DG.ProbDef.xL,DG.ProbDef.xR,DG.Mesh.Nelems*10);
       hold on
 
       % Plot the exact solution if it exists
       % ------------------------------------
-      if isfield(DGClass.ProbDef, 'Ue')
-        exactline = plot(xplot,DGClass.ProbDef.Ue(xplot,DGClass.t),...
+      if isfield(DG.ProbDef, 'Ue')
+        exactline = plot(xplot,DG.ProbDef.Ue(xplot,DG.t),...
                       'Color',0.7*ones(1,3),...
                       'LineWidth',3,...
                       'DisplayName','Exact Solution');
-        plot(xplot,DGClass.ProbDef.Ue(xplot,DGClass.t),...
+        plot(xplot,DG.ProbDef.Ue(xplot,DG.t),...
                       'Color',0.5*ones(1,3),...
                       'LineWidth',1,...
                       'DisplayName','Exact Solution');
@@ -292,13 +405,13 @@ classdef DGClass < handle
 
       % Plot the DG solution in MATLAB piecewise polynomial (pp) form
       % -------------------------------------------------------------
-      breaks = DGClass.Mesh.Points(:,1)';
-      coeffs = full(DGClass.Uh(:,1)'*PHI.Plot);
+      breaks = DG.Mesh.Points(:,1)';
+      coeffs = full(DG.Uh(:,1)'*PHI.Plot);
       DGpp = ppmak(breaks,coeffs);
       fnplt(DGpp,'jumps') % plot DG solution within elements
       ax = gca; DGline = ax.Children(1);
       set(DGline,'Color',[0/255, 24/255, 168/255],...
-          'DisplayName',['DG Solution, \it p \rm = ',num2str(DGClass.p)]')
+          'DisplayName',['DG Solution, \it p \rm = ',num2str(DG.p)]')
 
       xb = repmat(breaks,3,1);
       yb = repmat([200;-200;NaN],1,length(breaks));
@@ -319,10 +432,10 @@ classdef DGClass < handle
 
       % Label axes, title, legend, and draw
       % -----------------------------------
-      title(h1,['t = ',num2str(DGClass.t),', p = ',num2str(DGClass.p),')']);
+      title(h1,['t = ',num2str(DG.t),', p = ',num2str(DG.p),')']);
       ylabel('u, u_h','FontSize',13,'FontWeight','bold')
       xlabel('x','FontSize',13,'FontWeight','bold')
-      if isfield(DGClass.ProbDef, 'Ue')
+      if isfield(DG.ProbDef, 'Ue')
         legend([exactline, DGline])
       else
         legend(DGline)

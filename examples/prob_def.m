@@ -7,7 +7,7 @@ addpath('../timesteppers/')
 % ==============================================================
 % INPUT
 % ==============================================================
-M = 9; % tolerance for slope limiting
+M = 15; % tolerance for slope limiting (NaN for no limiting)
 % ==============================================================
 
 % --------------------------------------------------------------
@@ -39,13 +39,39 @@ ProbDef.f = @(u) ProbDef.c(u).*u;
 ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
 ProbDef.t0 = 0;
 ProbDef.T = 2/pi * 0.9;
-% ProbDef.limit_slope = true;        % Slope limiter switch
+
+% % Cockburn, Shu (1989) Example 2
+% % ------------------------------
+% ProbDef.name = 'CS_example_2';
+% ProbDef.xL = -1;
+% ProbDef.xR = 1;
+% ProbDef.BCtype = 'dirichlet';
+% ProbDef.BCL = ;
+% ProbDef.BCR = ;
+% ProbDef.c = @(u) u/2;
+% ProbDef.f = @(u) ProbDef.c(u).*u;
+% ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
+% ProbDef.t0 = 0;
+% ProbDef.T = 2/pi * 0.9;
+
+% Cockburn, Shu (1989) Example 3
+% ------------------------------
+% ProbDef.name = 'CS_example_3';
+% ProbDef.xL = -1;
+% ProbDef.xR = 1;
+% ProbDef.BCtype = 'dirichlet';
+% ProbDef.BCL = 2;
+% ProbDef.BCR = -2;
+% ProbDef.f = @(u) (1/4) .* (u.^2 - 1) .* (u.^2 - 4);
+% ProbDef.U0 = @(x) ProbDef.BCL * (x<0) + ProbDef.BCR * (x>0);
+% ProbDef.t0 = 0;
+% ProbDef.T = 1;
 
 
 % --------------------------
 % Construct the mesh object
 % --------------------------
-Nelems = 20;
+Nelems = 80;
 points(:,1) = linspace(ProbDef.xL,ProbDef.xR,Nelems+1);
 connectivity(:,1) = [1:Nelems];
 connectivity(:,2) = [2:Nelems+1];
@@ -58,7 +84,7 @@ Mesh = MeshClass(points, connectivity);
 % Initialize the solution in DG space
 % ------------------------------------
 p = 3; % DG polynomial degree
-DG = DGClass(p, Mesh, ProbDef);
+DG = DG(p, Mesh, ProbDef);
 
 TVsnorm1 = DG.TV_seminorm()
 
@@ -89,7 +115,7 @@ LM.r = 4;      % Number of steps
 [LM.C_ssp, LM.alpha, LM.beta] = Rkp(LM.r, LM.q); % SSP-optimized LM methods
 LM.cfl = 0.052; % Theoretical cfl from Google Drive
 
-dt = DG.Mesh.dx_min*LM.cfl*0.5;
+dt = DG.Mesh.dx_min*LM.cfl*0.9;
 NT = DG.ProbDef.T/dt;
 
 % Initialize necessary DG solution variables

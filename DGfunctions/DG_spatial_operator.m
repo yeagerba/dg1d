@@ -12,6 +12,9 @@ U.minus = DG.PHI.minus'*Uh; U.plus = DG.PHI.plus'*Uh;
 if strcmp(DG.ProbDef.BCtype, 'periodic')
   U.minus = [ U.minus(end); U.minus ];
   U.plus  = [ U.plus; U.plus(1) ];
+elseif strcmp(DG.ProbDef.BCtype, 'dirichlet')
+  U.minus = [DG.ProbDef.BCL; U.minus];
+  U.plus  = [U.plus; DG.ProbDef.BCR];
 end
 % Compute numerical flux
 %------------------------------------------------------------------
