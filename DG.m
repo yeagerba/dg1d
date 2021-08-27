@@ -88,7 +88,7 @@ classdef DG < handle
         DG
         RK
         dt (1,1) double
-        M  (1,1) double  = NaN
+        M  (1,1) double  = 20
       end
       % ===================================================================
       % This function steps the DG solution forward in time one step using
@@ -119,7 +119,7 @@ classdef DG < handle
           if ~isnan(M)
             m = M * DG.Mesh.dx.^2; % Should be row vector!
             % U = slopeLimiter(U, DG.p, DG.Mesh.Nelems, m.');
-            DG.slopeLimiter(m.');
+            y(:,i) = DG.slopeLimiter(y(:,i), m.');
           end
         end
       end
@@ -135,7 +135,7 @@ classdef DG < handle
         DG
         LM
         dt (1,1) double
-        M  (1,1) double  = NaN
+        M  (1,1) double  = 20
       end
       % ===================================================================
       % This function steps the DG solution forward in time one step using
@@ -160,7 +160,7 @@ classdef DG < handle
       if ~isnan(M)
         m = M * DG.Mesh.dx.^2; % Should be row vector!
         % U = slopeLimiter(U, DG.p, DG.Mesh.Nelems, m.');
-        DG.slopeLimiter(m.');
+        U = DG.slopeLimiter(U, m.');
       end
 
       % Update DG Solution, storing new solution in DG.Uh(:,1)
@@ -175,10 +175,10 @@ classdef DG < handle
       DG.t = DG.t + dt;
     end
 
-    function slopeLimiter(DG, m)
+    function ulim = slopeLimiter(DG, u, m)
       %% SLOPELIMITER Applies the minmod slope limiter
-      %    DoFs = slopeLimiter(DoFs,p,N) applies the minmod slope limiter to the
-      %    degrees of freedom, DoFs, of a DG solution of degree p for N elements.
+      %    DoFs = slopeLimiter(u,N) applies the minmod slope limiter to the
+      %    degrees of freedom, u, of a DG solution of degree p for N elements.
       %    See pages 193 and 194 of [1] for details.
       %
       %    Note: This implementation assumes the Legendre polynomials as a basis
@@ -195,28 +195,56 @@ classdef DG < handle
       %% Apply the slope limiter
 
       % Reshape the DoFs into a (p+1) by N array
-      u = reshape(DG.Uh(:,1),DG.p+1,DG.Mesh.Nelems);
+      u = reshape(u(:,1),DG.p+1,DG.Mesh.Nelems);
       % Store the mean value of the DG solution over each element
       uBar = u(1,:);
       % Compute the DG solution at the end points of the element
       uPlus  = (-ones(1,DG.p+1)).^(0:DG.p)*u;
       uMinus = ones(1,DG.p+1)*u;
-      % Compute the arguments used in the minmod function
-      u1 = [uMinus - uBar; uBar - uPlus];
+      % Compute deviation from the mean at element end points
+      enddev = [uMinus - uBar; uBar - uPlus];
       if strcmp(DG.ProbDef.BCtype, 'periodic')
-        u2 = uBar - [uBar(end), uBar(1:end-1)];
-        u3 = [uBar(2:end), uBar(1)] - uBar;
+        % Compute mean difference between neighboring elements
+        meandiffL = uBar - [uBar(end), uBar(1:end-1)];
+        meandiffR = [uBar(2:end), uBar(1)] - uBar;
+        % Apply the minmod function
+        [minmodMinus,iMinus] = minmod([enddev(1,:); meandiffL; meandiffR]);
+        [minmodPlus,iPlus]   = minmod([enddev(2,:); meandiffL; meandiffR]);
       elseif strcmp(DG.ProbDef.BCtype, 'dirichlet')
-        error('Not implemented')
-        u2 = uBar - [uBar(end), uBar(1:end-1)];
-        u3 = [uBar(2:end), uBar(1)] - uBar;
+        % Compute mean difference between neighboring elements
+        meandiffL = uBar - [DG.ProbDef.BCL, uBar(1:end-1)];
+        meandiffL(1) = 2*meandiffL(1);
+        meandiffR = [uBar(2:end), DG.ProbDef.BCR] - uBar;
+        meandiffR(end) = sign(enddev(1,1));    % meandiffR(end) = 2*meandiffR(end);
+        % Apply the minmod function
+        [minmodMinus,iMinus] = minmod([enddev(1,:); meandiffL; meandiffR]);
+
+        meandiffL = uBar - [DG.ProbDef.BCL, uBar(1:end-1)];
+        meandiffL(1) = sign(enddev(2,1));
+        meandiffR = [uBar(2:end), DG.ProbDef.BCR] - uBar;
+        meandiffR(end) = 2*meandiffR(end);
+        % Apply the minmod function
+        [minmodPlus,iPlus] = minmod([enddev(2,:); meandiffL; meandiffR]);
+      elseif strcmp(DG.ProbDef.BCtype, 'dirichletfnt')
+        % Compute mean difference between neighboring elements
+        meandiffL = uBar - [DG.ProbDef.BCL(DG.t), uBar(1:end-1)];
+        meandiffL(1) = 2*meandiffL(1);
+        meandiffR = [uBar(2:end), DG.ProbDef.BCR(DG.t)] - uBar;
+        meandiffR(end) = sign(enddev(1,1));    % meandiffR(end) = 2*meandiffR(end);
+        % Apply the minmod function
+        [minmodMinus,iMinus] = minmod([enddev(1,:); meandiffL; meandiffR]);
+
+        meandiffL = uBar - [DG.ProbDef.BCL(DG.t), uBar(1:end-1)];
+        meandiffL(1) = sign(enddev(2,1));
+        meandiffR = [uBar(2:end), DG.ProbDef.BCR(DG.t)] - uBar;
+        meandiffR(end) = 2*meandiffR(end);
+        % Apply the minmod function
+        [minmodPlus,iPlus] = minmod([enddev(2,:); meandiffL; meandiffR]);
       end
-      % Apply the minmod function
-      [minmodMinus,iMinus] = minmod([u1(1,:); u2; u3]);
-      [minmodPlus,iPlus] = minmod([u1(2,:); u2; u3]);
-      % Identify elements where |u1| <= m (see page 195 of [1])
-      iMinus(abs(u1(1,:))<=m) = 1;
-      iPlus(abs(u1(2,:))<=m) = 1;
+
+      % Identify elements where |enddev| <= m (see page 195 of [1])
+      iMinus(abs(enddev(1,:))<=m) = 1;
+      iPlus(abs(enddev(2,:))<=m) = 1;
       % Find elements to which slope limiter is applied
       iMod = or(iMinus~=1,iPlus~=1);
       % Compute the modified endpoints (see Eqs 2.10 and 2.11 on page 193 of [1])
@@ -229,8 +257,9 @@ classdef DG < handle
           % Zero out higher-order DoFs
           u(3:end,iMod) = 0;
       end
+
       % Save the modified DoFs
-      DG.Uh(:,1) = u(:);
+      ulim(:,1) = u(:);
 
       % ====================================
       % NESTED FUNCTION: minmod
