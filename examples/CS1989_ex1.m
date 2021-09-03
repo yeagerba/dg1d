@@ -17,18 +17,18 @@ timestepper = 'LM'; %'RK' or 'LM'
 % Cockburn, Shu (1989) Example 1
 % ------------------------------
 ProbDef.name = 'CS_example_1';
-ProbDef.xL = -2;
-ProbDef.xR = 2;
+ProbDef.xL = -1;
+ProbDef.xR = 1;
 ProbDef.BCtype = 'periodic';
 ProbDef.f = @(u) (1/2) * u.^2;
 ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
 ProbDef.t0 = 0;
-ProbDef.T = 1; %2/pi * 0.9;
+ProbDef.T = 2/pi;
 
 % --------------------------
 % Construct the mesh object
 % --------------------------
-Nelems = 80;
+Nelems = 40;
 points(:,1) = linspace(ProbDef.xL,ProbDef.xR,Nelems+1);
 connectivity(:,1) = [1:Nelems];
 connectivity(:,2) = [2:Nelems+1];
@@ -42,12 +42,13 @@ Mesh = MeshClass(points, connectivity);
 p = 2; % DG polynomial degree
 DG = DG(p, Mesh, ProbDef);
 
-% Calculate initial total variation
-TVsnorm1 = DG.TV_seminorm()
 
 % -------------------------------------------------
 % Step the solution forward in time
 % -------------------------------------------------
+
+% Calculate initial total variation
+TVsnorm1 = DG.TV_seminorm()
 
 if strcmp(timestepper, 'RK')
   % Define RK method

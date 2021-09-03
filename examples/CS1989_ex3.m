@@ -14,24 +14,32 @@ timestepper = 'LM'; %'RK' or 'LM'
 % --------------------------------------------------------------
 % Problem definition structure
 % --------------------------------------------------------------
-% Cockburn, Shu (1989) Example 3   % Need to fix numerical flux?
+% Cockburn, Shu (1989) Example 3
 % ------------------------------
 ProbDef.name = 'CS_example_3';
 ProbDef.xL = -1;
 ProbDef.xR = 1;
 ProbDef.BCtype = 'dirichlet';
-ProbDef.BCL = 2;
-ProbDef.BCR = -2;
+% Flux 1
+ProbDef.BCL = -3;
+ProbDef.BCR =  3;
 ProbDef.f = @(u) (1/4) .* (u.^2 - 1) .* (u.^2 - 4);
-% ProbDef.dfdu = @(u) u.^3 - (5/2) .* u
 ProbDef.U0 = @(x) ProbDef.BCL * (x<0) + ProbDef.BCR * (x>0);
 ProbDef.t0 = 0;
-ProbDef.T = 1.0; %*0.0077*1e-2;
+ProbDef.T = 0.03; %*0.0077*1e-2;
+
+% Flux 2 - Buckley-Leverett flux
+ProbDef.BCL = 0;
+ProbDef.BCR = 0;
+ProbDef.f = @(u) ( 4*u.^2 ) ./ ( 4*u.^2 + (1-u).^2 );
+ProbDef.U0 = @(x) (x > -0.5) .* (x < 0.0);
+ProbDef.t0 = 0;
+ProbDef.T = 0.4;
 
 % --------------------------
 % Construct the mesh object
 % --------------------------
-Nelems = 80;
+Nelems = 40;
 points(:,1) = linspace(ProbDef.xL,ProbDef.xR,Nelems+1);
 connectivity(:,1) = [1:Nelems];
 connectivity(:,2) = [2:Nelems+1];
@@ -70,7 +78,7 @@ elseif strcmp(timestepper, 'LM')
   LM.q = 3;      % Time stepper order
   LM.r = 4;      % Number of steps
   [LM.C_ssp, LM.alpha, LM.beta] = Rkp(LM.r, LM.q); % SSP-optimized LM methods
-  LM.cfl = 0.052*0.9; % Theoretical cfl from Google Drive
+  LM.cfl = 0.052*0.5; % Theoretical cfl from Google Drive
 
   dt = DG.Mesh.dx_min*LM.cfl
   NT = DG.ProbDef.T/dt;

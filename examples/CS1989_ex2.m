@@ -16,6 +16,8 @@ timestepper = 'RK'; % 'RK' or 'LM'
 % --------------------------------------------------------------
 % Cockburn, Shu (1989) Example 2
 % ------------------------------
+% In this case, we define the exact solution using a nested function (at the
+% bottom of this script)
 ProbDef.name = 'CS_example_2';
 ProbDef.xL = -1;
 ProbDef.xR = 1;
@@ -23,9 +25,10 @@ ProbDef.BCtype = 'dirichletfnt';
 ProbDef.BCL = @(t) Ue_example2(ProbDef.xL,t); % See nested function at end of script
 ProbDef.BCR = @(t) Ue_example2(ProbDef.xR,t);
 ProbDef.f = @(u) (1/2) * u.^2;
-ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*(x+0.1));
+ProbDef.Ue = @(x,t) Ue_example2(x,t);
+ProbDef.U0 = @(x) Ue_example2(x,0); %1/4 + 1/2 * sin(pi*(x+0.1));
 ProbDef.t0 = 0;
-ProbDef.T = 2/pi * 1.0;
+ProbDef.T = 2/pi;
 
 % --------------------------
 % Construct the mesh object
@@ -107,14 +110,17 @@ options = optimoptions('fsolve', ...
                        'Display', 'iter');
 
 function UE = Ue_example2(x,t)
-  Uefunc = @(u) u - ( 1/4 + 1/2 * sin(pi*(x-u*t)) );
-  [UE, fval, exitflag, fsolveout] = fzero(Uefunc, sin(pi*(x)));
-  if fval > 1e-12
-    disp('WARNING: fval > 1e-12')
-  end
-  if exitflag ~= 1 & exitflag ~= 4
-    disp(['WARNING: exitflag = ', string(exitflag)])
-    disp(fsolveout)
-    error('fsolve failed')
+  UE = zeros(length(x), 1);
+  for j = 1:length(x)
+    Uefunc = @(u) u - ( 1/4 + 1/2 * sin(pi*(x(j)-u*t)) );
+    [UE(j), fval, exitflag, fsolveout] = fzero(Uefunc, sin(pi*(x(j))));
+    if fval > 1e-12
+      disp('WARNING: fval > 1e-12')
+    end
+    if exitflag ~= 1 & exitflag ~= 4
+      disp(['WARNING: exitflag = ', string(exitflag)])
+      disp(fsolveout)
+      error('fsolve failed')
+    end
   end
 end
