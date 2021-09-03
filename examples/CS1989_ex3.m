@@ -17,13 +17,13 @@ timestepper = 'LM'; %'RK' or 'LM'
 % Cockburn, Shu (1989) Example 3   % Need to fix numerical flux?
 % ------------------------------
 ProbDef.name = 'CS_example_3';
-ProbDef.xL = -2;
-ProbDef.xR = 2;
+ProbDef.xL = -1;
+ProbDef.xR = 1;
 ProbDef.BCtype = 'dirichlet';
-ProbDef.BCL = 1;
-ProbDef.BCR = -1;
+ProbDef.BCL = 2;
+ProbDef.BCR = -2;
 ProbDef.f = @(u) (1/4) .* (u.^2 - 1) .* (u.^2 - 4);
-ProbDef.dfdu = @(u) u.^3 - (5/2) .* u
+% ProbDef.dfdu = @(u) u.^3 - (5/2) .* u
 ProbDef.U0 = @(x) ProbDef.BCL * (x<0) + ProbDef.BCR * (x>0);
 ProbDef.t0 = 0;
 ProbDef.T = 1.0; %*0.0077*1e-2;
@@ -70,7 +70,7 @@ elseif strcmp(timestepper, 'LM')
   LM.q = 3;      % Time stepper order
   LM.r = 4;      % Number of steps
   [LM.C_ssp, LM.alpha, LM.beta] = Rkp(LM.r, LM.q); % SSP-optimized LM methods
-  LM.cfl = 0.052; % Theoretical cfl from Google Drive
+  LM.cfl = 0.052*0.9; % Theoretical cfl from Google Drive
 
   dt = DG.Mesh.dx_min*LM.cfl
   NT = DG.ProbDef.T/dt;

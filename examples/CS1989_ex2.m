@@ -20,12 +20,10 @@ ProbDef.name = 'CS_example_2';
 ProbDef.xL = -1;
 ProbDef.xR = 1;
 ProbDef.BCtype = 'dirichletfnt';
-ProbDef.BCL = @(t) Ue_example2(ProbDef.xL,t);
+ProbDef.BCL = @(t) Ue_example2(ProbDef.xL,t); % See nested function at end of script
 ProbDef.BCR = @(t) Ue_example2(ProbDef.xR,t);
-ProbDef.c = @(u) u/2;
-ProbDef.f = @(u) ProbDef.c(u).*u;
-ProbDef.dfdu = @(u) u
-ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*x);
+ProbDef.f = @(u) (1/2) * u.^2;
+ProbDef.U0 = @(x) 1/4 + 1/2 * sin(pi*(x+0.1));
 ProbDef.t0 = 0;
 ProbDef.T = 2/pi * 1.0;
 

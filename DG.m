@@ -29,8 +29,11 @@ classdef DG < handle
 
       DG.p = p;
       DG.Mesh = Mesh;
-      DG.ProbDef = ProbDef;
       DG.NDoFs = Mesh.Nelems*(DG.p+1);
+      DG.ProbDef = ProbDef;
+      % Automatically compute the derivative of the flux function
+      syms u
+      DG.ProbDef.dfdu = matlabFunction(diff(DG.ProbDef.f(u)));
 
       % Get the quadrature points and weigths
       %--------------------------------------------------------------------------
