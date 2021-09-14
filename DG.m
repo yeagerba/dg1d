@@ -33,7 +33,7 @@ classdef DG < handle
       DG.ProbDef = ProbDef;
       % Automatically compute the derivative of the flux function
       syms u
-      DG.ProbDef.dfdu = matlabFunction(diff(DG.ProbDef.f(u)));
+      DG.ProbDef.dfdu = matlabFunction(diff(DG.ProbDef.f(u)), 'vars', [u]);
 
       % Get the quadrature points and weigths
       %--------------------------------------------------------------------------

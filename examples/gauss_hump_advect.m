@@ -8,7 +8,7 @@ addpath('../timesteppers/')
 % INPUT
 % ==============================================================
 M = 20; % tolerance for slope limiting (NaN for no limiting)
-timestepper = 'RK'; %'RK' or 'LM'
+timestepper = 'LM'; %'RK' or 'LM'
 % ==============================================================
 
 % --------------------------------------------------------------
@@ -22,7 +22,6 @@ ProbDef.xR = 1;                    % Right endpoint
 ProbDef.BCtype = 'periodic';       % Boundary conditions
 ProbDef.c  = @(u) 1;               % Wave propagation speed (linear advection)
 ProbDef.f  = @(u) ProbDef.c(u).*u; % Flux function (linear advection)
-ProbDef.dfdu = @(u) ProbDef.c(u);
 ProbDef.Ue = @(x,t) 1*exp( -((mod(x+1-t,2)-1)/0.25).^2 ); % Exact solution (if known)
 ProbDef.U0 = @(x) ProbDef.Ue(x,0); % Exact solution (if known)
 ProbDef.t0 = 0;                    % Initial time (set to 0 if not specified)
