@@ -349,7 +349,7 @@ classdef DG < handle
       X.elem = num2cell([DG.Mesh.Points(1:end-1),DG.Mesh.Points(2:end)]',1);
       X.l2 = cellfun(@mtimes,PSI.l2,[X.elem],'UniformOutput',0);
       X.l2 = reshape([X.l2{:}],numel([X.l2{:}]),1);
-      % Determine U at all points X.l2
+      % Determine U exact at all points X.l2
       %--------------------------------------------------------------------------
       UE = DG.ProbDef.Ue(X.l2,DG.t);
 
@@ -360,38 +360,51 @@ classdef DG < handle
 
     end
 
+    function L2_Norm = L2_norm(DG)
+
+      % Retrieve a sufficient number of Gauss points
+      %--------------------------------------------------------------------------
+      QRule = quadGaussJacobi(2*DG.p+3,0,0);
+      % Evaluate the basis functions at the Gauss points
+      %--------------------------------------------------------------------------
+      for i = 0:DG.p
+          phi_l2(i+1,:) = polyval(DG.phi{i+1},QRule.Points);
+      end
+      PHI = kron(speye(DG.Mesh.Nelems),phi_l2');
+      % Compute the DG solution at Gauss points
+      %--------------------------------------------------------------------------
+      Uh = PHI*DG.Uh(:,1);
+      % Compute the quadrature matrix
+      %--------------------------------------------------------------------------
+      q = diag(QRule.Weights); Q = cell(1,DG.Mesh.Nelems); [Q{:}] = deal(q);
+      Q = cellfun(@times,Q,num2cell(DG.Mesh.dx/2).','UniformOutput',0);
+      Q = kron(speye(DG.Mesh.Nelems),q);
+      % Compute the element psi vector
+      %--------------------------------------------------------------------------
+      psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
+      % Create the global X vector
+      %--------------------------------------------------------------------------
+      PSI.l2 = cell(1,DG.Mesh.Nelems); [PSI.l2{:}] = deal(([psi.l2]));
+      X.elem = num2cell([DG.Mesh.Points(1:end-1),DG.Mesh.Points(2:end)]',1);
+      X.l2 = cellfun(@mtimes,PSI.l2,[X.elem],'UniformOutput',0);
+      X.l2 = reshape([X.l2{:}],numel([X.l2{:}]),1);
+
+      % Compute the L2 error
+      %--------------------------------------------------------------------------
+      L2_Norm = sqrt(sum(Q*Uh.^2));
+
+    end
+
     function TV = TV_seminorm(DG)
       %% This can be made more efficient - element mean is just the first DOF!
 
       %--------------------------------------------------------------------------
-      % Input: DG.Uh    = Vector of DG degrees of freedom
-      %        DG.phi  = cell of basis functions
-      %        DG.Mesh = mesh structure with fields Connectivity and Points
+      % Input: DG.Uh = Vector of DG degrees of freedom
+      %        DG.p  = basis function polynomial degree
       %--------------------------------------------------------------------------
 
-      % Determine the number of int points
-      %--------------------------------------------------------------------------
-      nq = length(DG.phi);
-      % Determine the mesh sizes
-      %--------------------------------------------------------------------------
-      h = [DG.Mesh.Points(2:end)-DG.Mesh.Points(1:end-1)]';
-      % Retrieve Gauss points
-      %--------------------------------------------------------------------------
-      QRule = quadGaussJacobi(nq,0,0);
-      % Evaluate the basis functions at the Gauss points
-      %--------------------------------------------------------------------------
-      for i = 0:DG.p
-          phi_tv(i+1,:) = polyval(DG.phi{i+1},QRule.Points);
-      end
-      PHI = kron(speye(DG.Mesh.Nelems),phi_tv);
-      % Compute the DG solution at Gauss points
-      %--------------------------------------------------------------------------
-      Uh = PHI*DG.Uh(:,1);
-      Uh = reshape(Uh, [length(QRule.Weights), DG.Mesh.Nelems]).';
-      % Compute mean DG solution over each element
-      % -------------------------------------------------------------------------
-      Uint = Uh*QRule.Weights.*h.'./2;
-      Umean = Uint./h.';
+      % Compute mean DG solution over each element (just the first DOF)
+      Umean = DG.Uh(1:DG.p+1:end,1);
 
       % Compute total variation
       TV = sum(abs([Umean;Umean(1)] - [Umean(end); Umean]));

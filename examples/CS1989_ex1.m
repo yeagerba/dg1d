@@ -28,7 +28,7 @@ ProbDef.T = 2/pi;
 % --------------------------
 % Construct the mesh object
 % --------------------------
-Nelems = 40;
+Nelems = 3;
 points(:,1) = linspace(ProbDef.xL,ProbDef.xR,Nelems+1);
 connectivity(:,1) = [1:Nelems];
 connectivity(:,2) = [2:Nelems+1];
@@ -47,7 +47,9 @@ DG = DG(p, Mesh, ProbDef);
 % Step the solution forward in time
 % -------------------------------------------------
 
-% Calculate initial total variation
+% Calculate initial L2 norm
+L2norm1 = DG.L2_norm()
+% Calculate initial total variation in the means
 TVsnorm1 = DG.TV_seminorm()
 
 if strcmp(timestepper, 'RK')
@@ -90,6 +92,12 @@ end
 % ---------------
 % Postprocessing
 % ---------------
-% L2error = DG.L2_error()
+L2norm2 = DG.L2_norm()
 TVsnorm2 = DG.TV_seminorm()
+
+LogicStr = {'False', 'True'};
+disp(['L2 stable? ',LogicStr{(L2norm2<L2norm1)+1}, ...
+      ', L2 norm % growth = ',num2str( (L2norm2-L2norm1)/L2norm1*100 )])
+disp(['TVDM? ',LogicStr{(TVsnorm2<TVsnorm1)+1}, ...
+      ', TV seminorm % growth = ',num2str( (TVsnorm2-TVsnorm1)/TVsnorm1*100 )])
 DG.plot()
