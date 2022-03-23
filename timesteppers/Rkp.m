@@ -11,6 +11,9 @@ function [R,alpha,beta]=Rkp(k,p,varargin)
 %       * `\alpha, \beta` = the coefficients of the method
 %
 % Requires MATLAB's optimization toolbox for the LP solver.
+%
+% Code by David Ketcheson
+% Ref:
 
 %=========================================================
 %Initialize

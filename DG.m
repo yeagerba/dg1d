@@ -162,7 +162,6 @@ classdef DG < handle
       % Apply slope limiter
       if ~isnan(M)
         m = M * DG.Mesh.dx.^2; % Should be row vector!
-        % U = slopeLimiter(U, DG.p, DG.Mesh.Nelems, m.');
         U = DG.slopeLimiter(U, m.');
       end
 
@@ -265,7 +264,7 @@ classdef DG < handle
       ulim(:,1) = u(:);
 
       % ====================================
-      % NESTED FUNCTION: minmod
+      % NESTED FUNCTIONS: minmod
       % ====================================
       function [m,I] = minmod(A)
 
@@ -396,8 +395,6 @@ classdef DG < handle
     end
 
     function TV = TV_seminorm(DG)
-      %% This can be made more efficient - element mean is just the first DOF!
-
       %--------------------------------------------------------------------------
       % Input: DG.Uh = Vector of DG degrees of freedom
       %        DG.p  = basis function polynomial degree
