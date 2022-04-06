@@ -26,6 +26,10 @@ X.l2 = cellfun(@mtimes,PSI.l2,[X.elem],'UniformOutput',0);
 X.l2 = reshape([X.l2{:}],numel([X.l2{:}]),1);
 % Take the L2 projection of U
 %--------------------------------------------------------------------------
-U_L2 = L2*DG.ProbDef.U0(X.l2);
+if DG.t == 0
+  U_L2 = L2*DG.ProbDef.U0(X.l2);
+else
+  U_L2 = L2*DG.ProbDef.Ue(X.l2, DG.t);
+end
 
 end
