@@ -336,9 +336,8 @@ classdef DG < handle
       Uh = PHI*DG.Uh(:,1);
       % Compute the quadrature matrix
       %--------------------------------------------------------------------------
-      q = diag(QRule.Weights); Q = cell(1,DG.Mesh.Nelems); [Q{:}] = deal(q);
-      Q = cellfun(@times,Q,num2cell(DG.Mesh.dx/2).','UniformOutput',0);
-      Q = kron(speye(DG.Mesh.Nelems),q);
+      q = diag(QRule.Weights);
+      Q = kron(speye(DG.Mesh.Nelems).*DG.Mesh.dx/2,q);
       % Compute the element psi vector
       %--------------------------------------------------------------------------
       psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
@@ -375,9 +374,8 @@ classdef DG < handle
       Uh = PHI*DG.Uh(:,1);
       % Compute the quadrature matrix
       %--------------------------------------------------------------------------
-      q = diag(QRule.Weights); Q = cell(1,DG.Mesh.Nelems); [Q{:}] = deal(q);
-      Q = cellfun(@times,Q,num2cell(DG.Mesh.dx/2).','UniformOutput',0);
-      Q = kron(speye(DG.Mesh.Nelems),q);
+      q = diag(QRule.Weights);
+      Q = kron(speye(DG.Mesh.Nelems).*DG.Mesh.dx/2,q);
       % Compute the element psi vector
       %--------------------------------------------------------------------------
       psi(1).l2 = polyval([-1/2 1/2],QRule.Points); psi(2).l2 = polyval([1/2 1/2],QRule.Points);
